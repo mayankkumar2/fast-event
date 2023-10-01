@@ -36,7 +36,7 @@ pub async fn receiver_socket_handler(
     }
 
     let mut _read_idx = 0u128;
-    let mut message: Arc<Message>;
+    let mut messages: Vec<Arc<Message>>;
     let mut sig_wait: Receiver<Signal>;
     {
         let orc = event_orchestrator.lock().await;
@@ -52,22 +52,22 @@ pub async fn receiver_socket_handler(
                     {
                         let mut orc = event_orchestrator.lock().await;
                         let q = orc.queue_map.get_mut(&queue_name).unwrap();
-                        let msg = q.poll_message(_read_idx);
-                        _read_idx += 1;
+                        let msg = q.poll_message(&mut _read_idx);
                         if let Ok(msg) = msg {
-                            message = msg;
+                            messages = msg;
                         } else {
                             println!("{:?}", msg.err());
                             continue;
                         }
                     }
-                    println!("[RECEIVER signal: {}]", message.message);
-                    let r = frame_provider.1.send(message.message.to_string()).await;
-                    if r.is_err() {
-                        eprintln!("error: {:?}", r.err());
-                        return;
+                    println!("[RECEIVER {} messages..]", messages.len());
+                    for message in messages {
+                        let r = frame_provider.1.send(message.message.to_string()).await;
+                        if r.is_err() {
+                            eprintln!("error: {:?}", r.err());
+                            return;
+                        }
                     }
-
                 }
             },
             x = frame_provider.0.recv() => {

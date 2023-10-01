@@ -36,16 +36,24 @@ impl Queue {
         return self.inbound_sink.subscribe();
     }
 
-    pub fn poll_message(&self, read_idx: u128) -> Result<Arc<Message>, OffsetErr> {
-        if read_idx > self.end_idx && read_idx < self.start_idx {
+    pub fn poll_message(&self, read_idx: &mut u128) -> Result<Vec<Arc<Message>>, OffsetErr> {
+        if *read_idx > self.end_idx && *read_idx < self.start_idx {
             return Err(OffsetErr);
         }
 
-        let offset = read_idx - self.start_idx;
+        println!("IDX: {}: {}", read_idx, self.end_idx);
 
-        let message = self.queue.get(offset as usize).unwrap().clone();
 
-        return Ok(message);
+        let mut messages = Vec::new();
+
+        while *read_idx < self.end_idx {
+            let offset = *read_idx - self.start_idx;
+            let message = self.queue.get(offset as usize).unwrap().clone();
+            messages.push(message);
+            (*read_idx) += 1;
+        }
+
+        return Ok(messages);
     }
 }
 
