@@ -7,7 +7,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 
 pub struct Queue {
     queue: VecDeque<Arc<Message>>,
-    start_idx: u128,
+    pub(crate) start_idx: u128,
     pub(crate) end_idx: u128,
     inbound_sink: Sender<Signal>,
 }
@@ -15,7 +15,6 @@ pub struct Queue {
 impl Queue {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel::<Signal>(256);
-
         Self {
             queue: VecDeque::new(),
             start_idx: 0,
@@ -24,11 +23,22 @@ impl Queue {
         }
     }
 
+    pub fn clean(&mut self) {
+        if self.start_idx < self.end_idx {
+            self.queue.pop_front();
+            self.start_idx += 1;
+        }
+    }
+
     pub fn send_message(&mut self, message: Message) -> Result<(), Box<dyn Error>> {
         let msg = Arc::new(message);
         self.queue.push_back(msg);
         self.end_idx += 1;
-        self.inbound_sink.send(Signal)?;
+        if let Ok(len) = self.inbound_sink.send(Signal) {
+            println!("SIGNAL SUCCESS [{}]", len);
+        } else {
+            eprintln!("ERROR SENDING MESSAGE SIGNAL");
+        }
         Ok(())
     }
 
@@ -42,7 +52,6 @@ impl Queue {
         }
 
         println!("IDX: {}: {}", read_idx, self.end_idx);
-
 
         let mut messages = Vec::new();
 
@@ -67,7 +76,6 @@ pub struct Signal;
 pub fn deserialize(s: &String) -> &[u8] {
     return s.as_bytes();
 }
-
 
 // return len till which we have read to remove it from the buffer
 pub fn serialize(bytes: &[u8]) -> (Result<String, FragmentationProcessorError>, usize) {
